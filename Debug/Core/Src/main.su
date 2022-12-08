@@ -1,0 +1,14 @@
+../Core/Src/main.c:40:6:GPIO_Init	32	static
+../Core/Src/main.c:63:6:EXTI0_Init	24	static
+../Core/Src/main.c:80:6:delay_init	4	static
+../Core/Src/main.c:85:6:delay	16	static
+../Core/Src/main.c:92:6:Systick_custom_Handler	4	static
+../Core/Src/main.c:98:6:led_control	24	static
+../Core/Src/main.c:111:6:Get_button	16	static
+../Core/Src/main.c:116:6:EXTI0_IRQHandler	16	static
+../Core/Src/main.c:122:6:EXTI0_Custom_Handler	16	static
+../Core/Src/main.c:142:6:Flash_to_Ram	24	static
+../Core/Src/main.c:189:5:main	8	static
+../Core/Src/main.c:242:6:SystemClock_Config	88	static
+../Core/Src/main.c:284:13:MX_GPIO_Init	16	static
+../Core/Src/main.c:300:6:Error_Handler	4	static,ignoring_inline_asm
