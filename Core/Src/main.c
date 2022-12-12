@@ -153,6 +153,46 @@ void Flash_to_Ram()
 	uint32_t* Systick_address_Custom = (uint32_t*) 0x2000003C;
 	*Systick_address_Custom = (uint32_t)Systick_custom_Handler | 1;
 }
+
+void UART_Init()
+{
+	__HAL_RCC_GPIOA_CLK_ENABLE();
+	__HAL_RCC_USART2_CLK_ENABLE();
+
+	uint32_t* GPIOA_MODER = (uint32_t*)0x40020000;
+	*GPIOA_MODER &= ~(0b1111 << 4);
+	*GPIOA_MODER |= (0b10 << 4) | (0b10 << 6);
+	uint32_t* GPIOA_AFRL = (uint32_t*)0x40020020;
+	*GPIOA_AFRL |= (7 << 8) | (7 << 12);
+
+	// set baut rate
+	uint32_t* UART2_BRR = (uint32_t*)0x40004408;
+	*UART2_BRR = (104 << 4) | 3;
+
+	//set size and check chan le
+	uint32_t* UART2_CR1 = (uint32_t*)0x4000440c;
+	*UART2_CR1 |= (0b1 << 13) | (0b1 << 2) | (0b1 << 3);
+}
+
+void UART_Send_byte(char data)
+{
+	uint32_t* UART2_SR = (uint32_t*)0x40004400;
+	uint32_t* UART2_DR = (uint32_t*)0x40004404;
+
+	while(((*UART2_SR >> 7) & 1) != 1);
+	*UART2_DR = data;
+	while(((*UART2_SR >> 6) & 1) != 0);
+	//*UART2_SR &= ~(1 << 6);
+}
+
+void UART_Send_ARR(char* arr, int num)
+{
+	for(int i = 0; i < num; i++)
+	{
+		UART_Send_byte(arr[i]);
+	}
+}
+
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -200,7 +240,7 @@ int main(void)
   EXTI0_Init();
   delay_init();
   Flash_to_Ram();
-
+  UART_Init();
 
   /* USER CODE BEGIN Init */
 
@@ -216,7 +256,7 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   /* USER CODE BEGIN 2 */
-
+  char msg[] = "Hello PC! we  are the STM32 \r\n";
 
   /* USER CODE END 2 */
 
@@ -225,6 +265,7 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
+	  UART_Send_ARR(msg, sizeof(msg));
 		 led_control(0, LED_ON);
 		 delay(1000);
 		 led_control(0, LED_OFF);
