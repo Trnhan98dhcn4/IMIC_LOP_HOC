@@ -111,7 +111,7 @@ void led_control(int led_num, State_t state)
 char Get_button()
 {
 	uint32_t* GPIOD_IDR = (uint32_t*)(0x40020010);
-	return *GPIOD_IDR & 0b1;
+	return (*GPIOD_IDR & 1);
 }
 void EXTI0_IRQHandler()
 {
