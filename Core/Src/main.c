@@ -38,8 +38,6 @@ typedef enum
 uint32_t dem = 1;
 char rx_buf[128];
 int rx_index;
-int index_temp = 0;
-char temp[128];
 
 void GPIO_Init()
 {
@@ -149,13 +147,25 @@ void UART2_custom_Handler()
 	uint32_t* UART2_DR = (uint32_t*)0x40004404;
 	rx_buf[rx_index] = *UART2_DR;
 	rx_index++;
+
 	if(strstr(rx_buf, "on") != 0)
 	{
+		led_control(0, LED_ON);
 		led_control(1, LED_ON);
+		led_control(2, LED_ON);
+		led_control(3, LED_ON);
 		memset(rx_buf, 0, sizeof(rx_buf));
 		rx_index = 0;
 	}
-
+	else if(strstr(rx_buf, "off") != 0)
+	{
+		led_control(0, LED_OFF);
+		led_control(1, LED_OFF);
+		led_control(2, LED_OFF);
+		led_control(3, LED_OFF);
+		memset(rx_buf, 0, sizeof(rx_buf));
+		rx_index = 0;
+	}
 }
 void Flash_to_Ram()
 {
