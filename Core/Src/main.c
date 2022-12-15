@@ -36,6 +36,10 @@ typedef enum
 }State_t;
 
 uint32_t dem = 1;
+char rx_buf[128];
+int rx_index;
+int index_temp = 0;
+char temp[128];
 
 void GPIO_Init()
 {
@@ -139,6 +143,20 @@ void EXTI0_Custom_Handler()
 	uint32_t* PR = (uint32_t*)(0x40013c14);
 	*PR |= (0b1 << 0);
 }
+
+void UART2_custom_Handler()
+{
+	uint32_t* UART2_DR = (uint32_t*)0x40004404;
+	rx_buf[rx_index] = *UART2_DR;
+	rx_index++;
+	if(strstr(rx_buf, "on") != 0)
+	{
+		led_control(1, LED_ON);
+		memset(rx_buf, 0, sizeof(rx_buf));
+		rx_index = 0;
+	}
+
+}
 void Flash_to_Ram()
 {
 	memcpy(0x20000000, 0, 0x198);// copy vector table size 0 -> 0x198
@@ -152,6 +170,10 @@ void Flash_to_Ram()
 	//custom Systick
 	uint32_t* Systick_address_Custom = (uint32_t*) 0x2000003C;
 	*Systick_address_Custom = (uint32_t)Systick_custom_Handler | 1;
+
+	// custom UART2
+	uint32_t* UART2_address_Custom = (uint32_t*) 0x200000D8;
+	*UART2_address_Custom = (uint32_t)UART2_custom_Handler | 1;
 }
 
 void UART_Init()
@@ -171,7 +193,10 @@ void UART_Init()
 
 	//set size and check chan le
 	uint32_t* UART2_CR1 = (uint32_t*)0x4000440c;
-	*UART2_CR1 |= (0b1 << 13) | (0b1 << 2) | (0b1 << 3);
+	*UART2_CR1 |= (0b1 << 13) | (0b1 << 2) | (0b1 << 3) | (0b1 << 5);
+
+	uint32_t* NVIC_ISER1 = (uint32_t*)0xE000E104;
+	*NVIC_ISER1 |= (0b1 << (38 - 32));
 }
 
 void UART_Send_byte(char data)
@@ -192,6 +217,8 @@ void UART_Send_ARR(char* arr, int num)
 		UART_Send_byte(arr[i]);
 	}
 }
+
+
 
 /* USER CODE END PTD */
 
@@ -258,6 +285,7 @@ int main(void)
   /* USER CODE BEGIN 2 */
   char msg[] = "Hello PC! we  are the STM32 \r\n";
 
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -265,11 +293,7 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-	  UART_Send_ARR(msg, sizeof(msg));
-		 led_control(0, LED_ON);
-		 delay(1000);
-		 led_control(0, LED_OFF);
-		 delay(1000);
+	  //UART_Send_ARR(msg, sizeof(msg));
 
     /* USER CODE BEGIN 3 */
   }
