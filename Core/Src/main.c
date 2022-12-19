@@ -39,6 +39,7 @@ uint32_t dem = 1;
 char rx_buf[128];
 int rx_index;
 
+
 void GPIO_Init()
 {
 	__HAL_RCC_GPIOA_CLK_ENABLE();
@@ -203,10 +204,39 @@ void UART_Init()
 
 	//set size and check chan le
 	uint32_t* UART2_CR1 = (uint32_t*)0x4000440c;
-	*UART2_CR1 |= (0b1 << 13) | (0b1 << 2) | (0b1 << 3) | (0b1 << 5);
+	*UART2_CR1 |= (0b1 << 13) | (0b1 << 2) | (0b1 << 3);// | (0b1 << 5);
 
-	uint32_t* NVIC_ISER1 = (uint32_t*)0xE000E104;
-	*NVIC_ISER1 |= (0b1 << (38 - 32));
+	//set enable DMA of UART
+	uint32_t* UART2_CR3 = (uint32_t*)0x40004414;
+	*UART2_CR3 |= (0b1 << 6);
+}
+
+void DMA_Init()
+{
+	__HAL_RCC_DMA1_CLK_ENABLE();
+
+	uint32_t* DMA1_S5PAR = (uint32_t*)0x40026090;
+	*DMA1_S5PAR = 0x40004404;
+
+	uint32_t* DMA1_S5NDTR = (uint32_t*)0x4002608c;
+	*DMA1_S5NDTR = sizeof(rx_buf);
+
+	uint32_t* DMA1_S5M0AR = (uint32_t*)0x40026094;
+	*DMA1_S5M0AR = (uint32_t)rx_buf;
+
+	uint32_t* DMA1_S5CR = (uint32_t*)0x40026088;
+	*DMA1_S5CR &= ~(0b111 << 25);
+	*DMA1_S5CR |= (4 << 25) | (0b1 << 10) | (0b1 << 4) | (0b1 << 0);
+
+	uint32_t* NVIC_ISER0 = (uint32_t*)0xe000e100;
+	*NVIC_ISER0 |= (0b1 << 16);
+}
+
+void DMA1_Stream5_IRQHandler()
+{
+	__asm("NOP");
+	uint32_t* HIFCR = (uint32_t*)0x4002600C;
+	*HIFCR |= (0b1 << 11);
 }
 
 void UART_Send_byte(char data)
@@ -278,6 +308,7 @@ int main(void)
   delay_init();
   Flash_to_Ram();
   UART_Init();
+  DMA_Init();
 
   /* USER CODE BEGIN Init */
 
@@ -303,7 +334,8 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-	  //UART_Send_ARR(msg, sizeof(msg));
+/*	  UART_Send_ARR(msg, sizeof(msg));
+	  delay(1000);*/
 
     /* USER CODE BEGIN 3 */
   }
