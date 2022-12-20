@@ -193,16 +193,18 @@ void UART_Init()
 	__HAL_RCC_USART2_CLK_ENABLE();
 
 	uint32_t* GPIOA_MODER = (uint32_t*)0x40020000;
-	*GPIOA_MODER &= ~(0b1111 << 4);
-	*GPIOA_MODER |= (0b10 << 4) | (0b10 << 6);
+	*GPIOA_MODER &= ~(0b1111 << 4); // set PIN2,3
+	*GPIOA_MODER |= (0b10 << 4) | (0b10 << 6);// Pin2,3 Analog
 	uint32_t* GPIOA_AFRL = (uint32_t*)0x40020020;
 	*GPIOA_AFRL |= (7 << 8) | (7 << 12);
 
-	// set baut rate
+	// set baud rate 9600
 	uint32_t* UART2_BRR = (uint32_t*)0x40004408;
 	*UART2_BRR = (104 << 4) | 3;
 
-	//set size and check chan le
+	//set 13 enable UART, set 2 r/w enable TX, set 3 r/w enable RX
+	// set 5 enable Interrupt of UART
+	//size 8 byte and check chan le
 	uint32_t* UART2_CR1 = (uint32_t*)0x4000440c;
 	*UART2_CR1 |= (0b1 << 13) | (0b1 << 2) | (0b1 << 3);// | (0b1 << 5);
 
@@ -214,20 +216,25 @@ void UART_Init()
 void DMA_Init()
 {
 	__HAL_RCC_DMA1_CLK_ENABLE();
-
+	// stream 5 enable
 	uint32_t* DMA1_S5PAR = (uint32_t*)0x40026090;
-	*DMA1_S5PAR = 0x40004404;
+	*DMA1_S5PAR = 0x40004404;// read data of UART
 
 	uint32_t* DMA1_S5NDTR = (uint32_t*)0x4002608c;
-	*DMA1_S5NDTR = sizeof(rx_buf);
+	*DMA1_S5NDTR = 3;//sizeof(rx_buf); // read size of data
 
 	uint32_t* DMA1_S5M0AR = (uint32_t*)0x40026094;
-	*DMA1_S5M0AR = (uint32_t)rx_buf;
+	*DMA1_S5M0AR = (uint32_t)rx_buf;// read on RAM
 
+	// set 25 enable channel 4
+	// set 10 increment on 1 ex: var[0], var[1], var[2] ...
+	// set 4 read data full the interrupt enable complete
+	// set 0 enable DMA
 	uint32_t* DMA1_S5CR = (uint32_t*)0x40026088;
 	*DMA1_S5CR &= ~(0b111 << 25);
-	*DMA1_S5CR |= (4 << 25) | (0b1 << 10) | (0b1 << 4) | (0b1 << 0);
+	*DMA1_S5CR |= (4 << 25) | (0b1 << 10)| (0b1 << 8) | (0b1 << 4) | (0b1 << 0);
 
+	// set NVIC interrupt Cortex_M4 DMA
 	uint32_t* NVIC_ISER0 = (uint32_t*)0xe000e100;
 	*NVIC_ISER0 |= (0b1 << 16);
 }
@@ -235,6 +242,24 @@ void DMA_Init()
 void DMA1_Stream5_IRQHandler()
 {
 	__asm("NOP");
+	if(strstr(rx_buf, "on_") != 0)
+	{
+		led_control(0, LED_ON);
+		led_control(1, LED_ON);
+		led_control(2, LED_ON);
+		led_control(3, LED_ON);
+		memset(rx_buf, 0, sizeof(rx_buf));
+		rx_index = 0;
+	}
+	else if(strstr(rx_buf, "off") != 0)
+	{
+		led_control(0, LED_OFF);
+		led_control(1, LED_OFF);
+		led_control(2, LED_OFF);
+		led_control(3, LED_OFF);
+		memset(rx_buf, 0, sizeof(rx_buf));
+		rx_index = 0;
+	}
 	uint32_t* HIFCR = (uint32_t*)0x4002600C;
 	*HIFCR |= (0b1 << 11);
 }
@@ -244,8 +269,10 @@ void UART_Send_byte(char data)
 	uint32_t* UART2_SR = (uint32_t*)0x40004400;
 	uint32_t* UART2_DR = (uint32_t*)0x40004404;
 
+	//set TXE if TXE set 1 to return;
 	while(((*UART2_SR >> 7) & 1) != 1);
 	*UART2_DR = data;
+	// set TC if TC set 0 to return
 	while(((*UART2_SR >> 6) & 1) != 0);
 	//*UART2_SR &= ~(1 << 6);
 }
