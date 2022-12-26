@@ -36,8 +36,14 @@ typedef enum
 }State_t;
 
 uint32_t dem = 1;
-char rx_buf[128];
+char rx_buf[256];
 int rx_index;
+
+char ESP32_AT[] = "AT\r\n";
+char ESP32_MODE[] = "AT+CWMODE=1\r\n";
+char ESP32_CWJAP[] = "AT+CWJAP=\"FPT-Software-2G\",""\"Admin@2022\"\r\n";
+char ESP32_CIPSTART[] = "AT+CIPSTART=\"TCP\",""\"192.168.2.6\",""1234\r\n";
+char ESP32_CIPSEND[] = "AT+CIPSEND=3\r\n";
 
 
 void GPIO_Init()
@@ -116,14 +122,32 @@ char Get_button()
 	uint32_t* GPIOD_IDR = (uint32_t*)(0x40020010);
 	return (*GPIOD_IDR & 1);
 }
-void EXTI0_IRQHandler()
+
+
+void UART_Send_byte(char data)
 {
-	uint32_t* PR = (uint32_t*)(0x40013c14);
-	*PR |= (0b1 << 0);
+	uint32_t* UART2_SR = (uint32_t*)0x40004400;
+	uint32_t* UART2_DR = (uint32_t*)0x40004404;
+
+	//set TXE if TXE set 1 to return;
+	while(((*UART2_SR >> 7) & 1) != 1);
+	*UART2_DR = data;
+	// set TC if TC set 0 to return
+	while(((*UART2_SR >> 6) & 1) != 0);
+	//*UART2_SR &= ~(1 << 6);
+}
+
+void UART_Send_ARR(char* arr, int num)
+{
+	for(int i = 0; i < num; i++)
+	{
+		UART_Send_byte(arr[i]);
+	}
 }
 
 void EXTI0_Custom_Handler()
 {
+
 	dem++;
 	if(dem % 2 == 0)
 	{
@@ -131,9 +155,17 @@ void EXTI0_Custom_Handler()
 		led_control(1, LED_ON);
 		led_control(2, LED_ON);
 		led_control(3, LED_ON);
+		UART_Send_ARR(ESP32_AT, sizeof(ESP32_AT));
+		UART_Send_ARR(ESP32_MODE, sizeof(ESP32_MODE));
+		UART_Send_ARR(ESP32_CWJAP, sizeof(ESP32_CWJAP));
+;
+
 	}
 	else
 	{
+		UART_Send_ARR(ESP32_CIPSTART, sizeof(ESP32_CIPSTART));
+		UART_Send_ARR(ESP32_CIPSEND, sizeof(ESP32_CIPSEND));
+		//memset(rx_buf, 0, 255);
 		led_control(0, LED_OFF);
 		led_control(1, LED_OFF);
 	    led_control(2, LED_OFF);
@@ -200,7 +232,7 @@ void UART_Init()
 
 	// set baud rate 9600
 	uint32_t* UART2_BRR = (uint32_t*)0x40004408;
-	*UART2_BRR = (104 << 4) | 3;
+	*UART2_BRR = (8 << 4) | 11;
 
 	//set 13 enable UART, set 2 r/w enable TX, set 3 r/w enable RX
 	// set 5 enable Interrupt of UART
@@ -221,7 +253,7 @@ void DMA_Init()
 	*DMA1_S5PAR = 0x40004404;// read data of UART
 
 	uint32_t* DMA1_S5NDTR = (uint32_t*)0x4002608c;
-	*DMA1_S5NDTR = 3;//sizeof(rx_buf); // read size of data
+	*DMA1_S5NDTR = sizeof(rx_buf); // read size of data
 
 	uint32_t* DMA1_S5M0AR = (uint32_t*)0x40026094;
 	*DMA1_S5M0AR = (uint32_t)rx_buf;// read on RAM
@@ -242,48 +274,12 @@ void DMA_Init()
 void DMA1_Stream5_IRQHandler()
 {
 	__asm("NOP");
-	if(strstr(rx_buf, "on_") != 0)
-	{
-		led_control(0, LED_ON);
-		led_control(1, LED_ON);
-		led_control(2, LED_ON);
-		led_control(3, LED_ON);
-		memset(rx_buf, 0, sizeof(rx_buf));
-		rx_index = 0;
-	}
-	else if(strstr(rx_buf, "off") != 0)
-	{
-		led_control(0, LED_OFF);
-		led_control(1, LED_OFF);
-		led_control(2, LED_OFF);
-		led_control(3, LED_OFF);
-		memset(rx_buf, 0, sizeof(rx_buf));
-		rx_index = 0;
-	}
+
 	uint32_t* HIFCR = (uint32_t*)0x4002600C;
 	*HIFCR |= (0b1 << 11);
 }
 
-void UART_Send_byte(char data)
-{
-	uint32_t* UART2_SR = (uint32_t*)0x40004400;
-	uint32_t* UART2_DR = (uint32_t*)0x40004404;
 
-	//set TXE if TXE set 1 to return;
-	while(((*UART2_SR >> 7) & 1) != 1);
-	*UART2_DR = data;
-	// set TC if TC set 0 to return
-	while(((*UART2_SR >> 6) & 1) != 0);
-	//*UART2_SR &= ~(1 << 6);
-}
-
-void UART_Send_ARR(char* arr, int num)
-{
-	for(int i = 0; i < num; i++)
-	{
-		UART_Send_byte(arr[i]);
-	}
-}
 
 
 
@@ -364,6 +360,27 @@ int main(void)
 /*	  UART_Send_ARR(msg, sizeof(msg));
 	  delay(1000);*/
 
+	  //"+IPD,3:on_\r\n"
+		if(strstr(rx_buf, "+IPD,2:on\r\n") != 0)
+		{
+			led_control(0, LED_ON);
+			led_control(1, LED_ON);
+			led_control(2, LED_ON);
+			led_control(3, LED_ON);
+			//memset(rx_buf, 0, 255);
+			UART_Send_ARR(ESP32_CIPSEND, sizeof(ESP32_CIPSEND));
+
+		}
+		else if(strstr(rx_buf, "+IPD,2:of\r\n") != 0)
+		{
+
+			led_control(0, LED_OFF);
+			led_control(1, LED_OFF);
+			led_control(2, LED_OFF);
+			led_control(3, LED_OFF);
+			UART_Send_ARR(ESP32_CIPSEND, sizeof(ESP32_CIPSEND));
+			//memset(rx_buf, 0, 255);
+		}
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
