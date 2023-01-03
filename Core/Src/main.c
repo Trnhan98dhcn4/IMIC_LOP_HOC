@@ -18,7 +18,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include <string.h>
+#include "string.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -35,14 +35,26 @@ typedef enum
 	LED_ON
 }State_t;
 
+typedef enum
+{
+	sector_0,
+	sector_1,
+	sector_2,
+	sector_3,
+	sector_4,
+	sector_5,
+	sector_6,
+	sector_7
+}Sector_t;
+
 uint32_t dem = 1;
-char rx_buf[256];
+char rx_buf[5176];
 int rx_index;
 
 char ESP32_AT[] = "AT\r\n";
 char ESP32_MODE[] = "AT+CWMODE=1\r\n";
 char ESP32_CWJAP[] = "AT+CWJAP=\"FPT-Software-2G\",""\"Admin@2022\"\r\n";
-char ESP32_CIPSTART[] = "AT+CIPSTART=\"TCP\",""\"192.168.2.6\",""1234\r\n";
+char ESP32_CIPSTART[] = "AT+CIPSTART=\"TCP\",""\"192.168.2.9\",""1234\r\n";
 char ESP32_CIPSEND[] = "AT+CIPSEND=3\r\n";
 
 
@@ -271,15 +283,68 @@ void DMA_Init()
 	*NVIC_ISER0 |= (0b1 << 16);
 }
 
+__attribute__((section(".function_in_ram"))) void Erase_Sector(Sector_t sector)
+{
+	uint32_t* FLASH_SR = (uint32_t*)0x40023c0c;
+	uint32_t* FLASH_CR = (uint32_t*)0x40023c10;
+
+	while(((*FLASH_SR >> 16) & 1) == 1);// check Flash memory operation bit 16 BSY
+	if((*FLASH_CR >> 31) == 1) //check block
+	{
+		uint32_t* FLASH_KEYR = (uint32_t*)0x40023c04;
+		*FLASH_KEYR = 0x45670123;
+		*FLASH_KEYR = 0xCDEF89AB;
+	}
+	*FLASH_CR &= ~(0xf << 3);
+	*FLASH_CR |= (sector << 3) | (0b1 << 1);
+	*FLASH_CR |= (0b1 << 16);
+	while(((*FLASH_SR >> 16) & 1) == 1);
+	*FLASH_CR &= ~(0b1 << 16);
+}
+
+__attribute__((section(".function_in_ram"))) void Programming(void* addr, char* data, int size)
+{
+	uint32_t* FLASH_SR = (uint32_t*)0x40023c0c;
+	uint32_t* FLASH_CR = (uint32_t*)0x40023c10;
+
+	while(((*FLASH_SR >> 16) & 1) == 1);// check Flash memory operation bit 16 BSY
+	if((*FLASH_CR >> 31) == 1) //check block
+	{
+		uint32_t* FLASH_KEYR = (uint32_t*)0x40023c04;
+		*FLASH_KEYR = 0x45670123;
+		*FLASH_KEYR = 0xCDEF89AB;
+	}
+
+	*FLASH_CR |= (0b1 << 0);
+
+	char* temp_address = addr;
+	for(int i = 0; i < size; i++)
+	{
+		*temp_address = data[i];
+		while(((*FLASH_SR >> 16) & 1) == 1);
+		temp_address++;
+	}
+
+	*FLASH_CR &= ~(0b1 << 0);
+}
+int recv_done = 0;
 void DMA1_Stream5_IRQHandler()
 {
+	recv_done = 1;
 	__asm("NOP");
 
 	uint32_t* HIFCR = (uint32_t*)0x4002600C;
 	*HIFCR |= (0b1 << 11);
 }
 
-
+__attribute__((section(".function_in_ram"))) void update_sector()
+{
+	*SYST_CR = 0;
+	Erase_Sector(sector_0);
+	Programming(0x08000000, rx_buf, sizeof(rx_buf));
+	uint32_t* AIRCR = (uint32_t*)0xE000ED0C;
+	*AIRCR = (0x5FA << 16) | (0b1 << 2);
+}
 
 
 
@@ -348,7 +413,10 @@ int main(void)
   MX_GPIO_Init();
   /* USER CODE BEGIN 2 */
   char msg[] = "Hello PC! we  are the STM32 \r\n";
-
+/*
+  Erase_Sector(sector_1);
+  Programming((void*)0x08004000, msg, sizeof(msg));
+*/
 
   /* USER CODE END 2 */
 
@@ -359,9 +427,16 @@ int main(void)
     /* USER CODE END WHILE */
 /*	  UART_Send_ARR(msg, sizeof(msg));
 	  delay(1000);*/
-
+	  if(recv_done == 1)
+	  {
+		  update_sector();
+	  }
+	  led_control(0, LED_ON);
+	  delay(1000);
+	  led_control(0, LED_OFF);
+	  delay(1000);
 	  //"+IPD,3:on_\r\n"
-		if(strstr(rx_buf, "+IPD,2:on\r\n") != 0)
+/*		if(strstr(rx_buf, "+IPD,2:on\r\n") != 0)
 		{
 			led_control(0, LED_ON);
 			led_control(1, LED_ON);
@@ -380,7 +455,7 @@ int main(void)
 			led_control(3, LED_OFF);
 			UART_Send_ARR(ESP32_CIPSEND, sizeof(ESP32_CIPSEND));
 			//memset(rx_buf, 0, 255);
-		}
+		}*/
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
