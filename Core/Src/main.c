@@ -19,6 +19,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "string.h"
+#include "spi_lib.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -27,6 +28,7 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
+
 
 
 typedef enum
@@ -214,7 +216,7 @@ void UART2_custom_Handler()
 }
 void Flash_to_Ram()
 {
-	memcpy(0x20000000, 0, 0x198);// copy vector table size 0 -> 0x198
+	memcpy((void*)0x20000000, 0, 0x198);// copy vector table size 0 -> 0x198
 	uint32_t* VTOR = (uint32_t*)0xe000ed08; // enable vector table
 	*VTOR = 0x20000000; //in Ram
 
@@ -272,6 +274,7 @@ void DMA_Init()
 
 	// set 25 enable channel 4
 	// set 10 increment on 1 ex: var[0], var[1], var[2] ...
+	// set 8 Circular mode
 	// set 4 read data full the interrupt enable complete
 	// set 0 enable DMA
 	uint32_t* DMA1_S5CR = (uint32_t*)0x40026088;
@@ -282,6 +285,67 @@ void DMA_Init()
 	uint32_t* NVIC_ISER0 = (uint32_t*)0xe000e100;
 	*NVIC_ISER0 |= (0b1 << 16);
 }
+
+/*
+void SPI_Init()
+{
+	__HAL_RCC_GPIOA_CLK_ENABLE();
+
+	uint32_t* GPIOA_MODER = (uint32_t*)0x40020000;
+	*GPIOA_MODER &= ~(0b111111 << 10);
+	*GPIOA_MODER |= (0b10 << 10) | (0b10 << 12) | (0b10 << 14); // set analog
+	uint32_t* GPIOA_AFRL = (uint32_t*)0x40020020;
+	*GPIOA_AFRL &= ~(0xfff << 20);
+	*GPIOA_AFRL |= (5 << 20) | (5 << 24) | (5 << 28);//set function SPI
+
+	__HAL_RCC_GPIOE_CLK_ENABLE();
+
+	uint32_t* GPIOE_MODER = (uint32_t*)0x40021000;
+	*GPIOE_MODER &= ~(0b11 << 6);
+	*GPIOE_MODER |= (0b01 << 6); //set output get SS SPI;
+
+	SENSOR_INACTIVE;
+
+	__HAL_RCC_SPI1_CLK_ENABLE();
+
+	uint32_t* SPI1_CR1 = (uint32_t*)0x40013000;
+	*SPI1_CR1 |= (0b100 << 3); // set CLK 32
+	// set bit 2 MSTR chon MASTER
+	// set bit 6 SPE:  enable SPI
+	// set bit 8 SSI: Internal slave select
+	// set bit 9 SSM: Software slave management
+	*SPI1_CR1 |= (0b1 << 2) | (0b1 << 6) | (0b1 << 8) | (0b1 << 9);
+
+}
+
+uint32_t SPI_Sensor_Read(uint32_t cmd)
+{
+	uint32_t* SPI1_SR = (uint32_t*)0x40013008;
+	uint32_t* SPI1_DR = (uint32_t*)0x4001300c;
+
+	SENSOR_ACTIVE;
+	while(((*SPI1_SR >> 1) & 1) != 1); // check data
+	uint32_t  data_send = cmd | (0b1 << 7);
+	*SPI1_DR = data_send;
+
+	while(((*SPI1_SR >> 1) & 1) == 1); // check data empty
+	while(((*SPI1_SR >> 0) & 1) != 1);
+	while(((*SPI1_SR >> 7) & 1) == 1);
+
+	uint32_t temp = *SPI1_DR;
+
+	while(((*SPI1_SR >> 1) & 1) != 1);
+	*SPI1_DR = 0x00; // set CLK
+	while(((*SPI1_SR >> 1) & 1) == 1); // check data empty
+	while(((*SPI1_SR >> 0) & 1) != 1);
+	while(((*SPI1_SR >> 7) & 1) == 1);
+
+	temp = *SPI1_DR;
+
+	SENSOR_INACTIVE;
+	return temp;
+}
+*/
 
 __attribute__((section(".function_in_ram"))) void Erase_Sector(Sector_t sector)
 {
@@ -296,10 +360,10 @@ __attribute__((section(".function_in_ram"))) void Erase_Sector(Sector_t sector)
 		*FLASH_KEYR = 0xCDEF89AB;
 	}
 	*FLASH_CR &= ~(0xf << 3);
-	*FLASH_CR |= (sector << 3) | (0b1 << 1);
-	*FLASH_CR |= (0b1 << 16);
+	*FLASH_CR |= (sector << 3) | (0b1 << 1); // set erase bit 3
+	*FLASH_CR |= (0b1 << 16); // bit 16 on STRT of check
 	while(((*FLASH_SR >> 16) & 1) == 1);
-	*FLASH_CR &= ~(0b1 << 16);
+	*FLASH_CR &= ~(0b1 << 16);//bit 16 off STRT of check
 }
 
 __attribute__((section(".function_in_ram"))) void Programming(void* addr, char* data, int size)
@@ -315,13 +379,13 @@ __attribute__((section(".function_in_ram"))) void Programming(void* addr, char* 
 		*FLASH_KEYR = 0xCDEF89AB;
 	}
 
-	*FLASH_CR |= (0b1 << 0);
+	*FLASH_CR |= (0b1 << 0);// set bit 1 PG
 
-	char* temp_address = addr;
+	char* temp_address = addr; //read address on  ram
 	for(int i = 0; i < size; i++)
 	{
-		*temp_address = data[i];
-		while(((*FLASH_SR >> 16) & 1) == 1);
+		*temp_address = data[i]; //  address on data
+		while(((*FLASH_SR >> 16) & 1) == 1); // check bit 16 BSY
 		temp_address++;
 	}
 
@@ -341,9 +405,9 @@ __attribute__((section(".function_in_ram"))) void update_sector()
 {
 	*SYST_CR = 0;
 	Erase_Sector(sector_0);
-	Programming(0x08000000, rx_buf, sizeof(rx_buf));
-	uint32_t* AIRCR = (uint32_t*)0xE000ED0C;
-	*AIRCR = (0x5FA << 16) | (0b1 << 2);
+	Programming((void*)0x08000000, rx_buf, sizeof(rx_buf));
+	uint32_t* AIRCR = (uint32_t*)0xE000ED0C;// enable reset address
+	*AIRCR = (0x5FA << 16) | (0b1 << 2);// on key bit 16 , enable bit 2 reset
 }
 
 
@@ -397,6 +461,7 @@ int main(void)
   Flash_to_Ram();
   UART_Init();
   DMA_Init();
+  SPI_Init();
 
   /* USER CODE BEGIN Init */
 
@@ -417,7 +482,10 @@ int main(void)
   Erase_Sector(sector_1);
   Programming((void*)0x08004000, msg, sizeof(msg));
 */
-
+  uint32_t sensor_id = SPI_Sensor_Read(WHO_I_AM);
+  //SPI_Sensor_Write(CTRL_REG1, 0b00001111);
+  delay(1000);
+  //uint32_t check_data = SPI_Sensor_Read(CTRL_REG1);
   /* USER CODE END 2 */
 
   /* Infinite loop */
