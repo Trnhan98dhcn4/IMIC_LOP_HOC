@@ -52,6 +52,10 @@ typedef enum
 uint32_t dem = 1;
 char rx_buf[5176];
 int rx_index;
+short data_sensor[3] = {0};
+short x = 0;
+short y = 0;
+short z = 0;
 
 char ESP32_AT[] = "AT\r\n";
 char ESP32_MODE[] = "AT+CWMODE=1\r\n";
@@ -463,6 +467,7 @@ int main(void)
   DMA_Init();
   SPI_Init();
 
+
   /* USER CODE BEGIN Init */
 
   /* USER CODE END Init */
@@ -483,9 +488,11 @@ int main(void)
   Programming((void*)0x08004000, msg, sizeof(msg));
 */
   uint32_t sensor_id = SPI_Sensor_Read(WHO_I_AM);
-  //SPI_Sensor_Write(CTRL_REG1, 0b00001111);
+  (void)sensor_id;
+  SPI_Sensor_Write(CTRL_REG1, 0b00001111);
+  uint32_t sensor_ctrl = SPI_Sensor_Read(CTRL_REG1);
+  (void)sensor_ctrl;
   delay(1000);
-  //uint32_t check_data = SPI_Sensor_Read(CTRL_REG1);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -499,9 +506,14 @@ int main(void)
 	  {
 		  update_sector();
 	  }
-	  led_control(0, LED_ON);
+	/*  led_control(0, LED_ON);
 	  delay(1000);
 	  led_control(0, LED_OFF);
+	  delay(1000);*/
+	  SPI_Multi_Read(OUT_X_L, data_sensor, 6);
+	  x = data_sensor[0];
+	  y = data_sensor[1];
+	  z = data_sensor[2];
 	  delay(1000);
 	  //"+IPD,3:on_\r\n"
 /*		if(strstr(rx_buf, "+IPD,2:on\r\n") != 0)
