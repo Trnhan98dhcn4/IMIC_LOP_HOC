@@ -1,3 +1,4 @@
+"./Core/Src/i2c_lib.o"
 "./Core/Src/main.o"
 "./Core/Src/spi_lib.o"
 "./Core/Src/stm32f4xx_hal_msp.o"

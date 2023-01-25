@@ -20,6 +20,7 @@
 #include "main.h"
 #include "string.h"
 #include "spi_lib.h"
+#include "i2c_lib.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -53,9 +54,9 @@ uint32_t dem = 1;
 char rx_buf[5176];
 int rx_index;
 short data_sensor[3] = {0};
-short x = 0;
-short y = 0;
-short z = 0;
+char x = 0;
+char y = 0;
+char z = 0;
 
 char ESP32_AT[] = "AT\r\n";
 char ESP32_MODE[] = "AT+CWMODE=1\r\n";
@@ -290,66 +291,6 @@ void DMA_Init()
 	*NVIC_ISER0 |= (0b1 << 16);
 }
 
-/*
-void SPI_Init()
-{
-	__HAL_RCC_GPIOA_CLK_ENABLE();
-
-	uint32_t* GPIOA_MODER = (uint32_t*)0x40020000;
-	*GPIOA_MODER &= ~(0b111111 << 10);
-	*GPIOA_MODER |= (0b10 << 10) | (0b10 << 12) | (0b10 << 14); // set analog
-	uint32_t* GPIOA_AFRL = (uint32_t*)0x40020020;
-	*GPIOA_AFRL &= ~(0xfff << 20);
-	*GPIOA_AFRL |= (5 << 20) | (5 << 24) | (5 << 28);//set function SPI
-
-	__HAL_RCC_GPIOE_CLK_ENABLE();
-
-	uint32_t* GPIOE_MODER = (uint32_t*)0x40021000;
-	*GPIOE_MODER &= ~(0b11 << 6);
-	*GPIOE_MODER |= (0b01 << 6); //set output get SS SPI;
-
-	SENSOR_INACTIVE;
-
-	__HAL_RCC_SPI1_CLK_ENABLE();
-
-	uint32_t* SPI1_CR1 = (uint32_t*)0x40013000;
-	*SPI1_CR1 |= (0b100 << 3); // set CLK 32
-	// set bit 2 MSTR chon MASTER
-	// set bit 6 SPE:  enable SPI
-	// set bit 8 SSI: Internal slave select
-	// set bit 9 SSM: Software slave management
-	*SPI1_CR1 |= (0b1 << 2) | (0b1 << 6) | (0b1 << 8) | (0b1 << 9);
-
-}
-
-uint32_t SPI_Sensor_Read(uint32_t cmd)
-{
-	uint32_t* SPI1_SR = (uint32_t*)0x40013008;
-	uint32_t* SPI1_DR = (uint32_t*)0x4001300c;
-
-	SENSOR_ACTIVE;
-	while(((*SPI1_SR >> 1) & 1) != 1); // check data
-	uint32_t  data_send = cmd | (0b1 << 7);
-	*SPI1_DR = data_send;
-
-	while(((*SPI1_SR >> 1) & 1) == 1); // check data empty
-	while(((*SPI1_SR >> 0) & 1) != 1);
-	while(((*SPI1_SR >> 7) & 1) == 1);
-
-	uint32_t temp = *SPI1_DR;
-
-	while(((*SPI1_SR >> 1) & 1) != 1);
-	*SPI1_DR = 0x00; // set CLK
-	while(((*SPI1_SR >> 1) & 1) == 1); // check data empty
-	while(((*SPI1_SR >> 0) & 1) != 1);
-	while(((*SPI1_SR >> 7) & 1) == 1);
-
-	temp = *SPI1_DR;
-
-	SENSOR_INACTIVE;
-	return temp;
-}
-*/
 
 __attribute__((section(".function_in_ram"))) void Erase_Sector(Sector_t sector)
 {
@@ -465,7 +406,8 @@ int main(void)
   Flash_to_Ram();
   UART_Init();
   DMA_Init();
-  SPI_Init();
+  //SPI_Init();
+  I2C_Init();
 
 
   /* USER CODE BEGIN Init */
@@ -487,11 +429,12 @@ int main(void)
   Erase_Sector(sector_1);
   Programming((void*)0x08004000, msg, sizeof(msg));
 */
-  uint32_t sensor_id = SPI_Sensor_Read(WHO_I_AM);
-  (void)sensor_id;
-  SPI_Sensor_Write(CTRL_REG1, 0b00001111);
-  uint32_t sensor_ctrl = SPI_Sensor_Read(CTRL_REG1);
-  (void)sensor_ctrl;
+  //uint32_t sensor_id = SPI_Sensor_Read(WHO_I_AM);
+  //(void)sensor_id;
+  //SPI_Sensor_Write(CTRL_REG1, 0b00001111);
+ // uint32_t sensor_ctrl = SPI_Sensor_Read(CTRL_REG1);
+  //(void)sensor_ctrl;
+  uint8_t sensor2_i2c_sensor = I2C_read_LSM(WHO_AM_I_A);
   delay(1000);
   /* USER CODE END 2 */
 
@@ -506,15 +449,15 @@ int main(void)
 	  {
 		  update_sector();
 	  }
-	/*  led_control(0, LED_ON);
+	  led_control(0, LED_ON);
 	  delay(1000);
 	  led_control(0, LED_OFF);
-	  delay(1000);*/
-	  SPI_Multi_Read(OUT_X_L, data_sensor, 6);
+	  delay(1000);
+	  /*SPI_Multi_Read(OUT_X_L, data_sensor, 6);
 	  x = data_sensor[0];
 	  y = data_sensor[1];
 	  z = data_sensor[2];
-	  delay(1000);
+	  delay(1000);*/
 	  //"+IPD,3:on_\r\n"
 /*		if(strstr(rx_buf, "+IPD,2:on\r\n") != 0)
 		{
